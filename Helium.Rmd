@@ -25,8 +25,6 @@ To fetch the data, we can:
   - Use the API
   - Download data dump from http://18.212.212.108:8000/ 
 
-# Data
-
 ```{r}
 # First, let's load a few useful packages
 library(knitr)
@@ -39,6 +37,10 @@ library(h3)
 library(lubridate)
 ```
 
+# Data
+
+## Packet data
+
 fread from the data.table package is similar to read.table but much faster and more convenient. It takes care of decompressing files automatically.
 
 When you work with big data, the key is to eliminate the data you don't need to save memory.
@@ -49,7 +51,7 @@ listFilesPackets <- list.files("data/packets", pattern=".csv.gz", recursive = T)
 
 # We specify the columns we want to keep directly in the fread call to save memory
 # dataPackets <- lapply(1:length(listFilesPackets),function(i){
-dataPackets <- lapply(1:2,function(i){
+dataPackets <- lapply(1:6,function(i){
   
   print(i)
   data <- fread(file = paste0("data/packets/",listFilesPackets[i]), select = c("block", "transaction_hash", "time", "gateway", "num_dcs")) 
@@ -59,7 +61,8 @@ dataPackets <- lapply(1:2,function(i){
 
 dataPackets <- dplyr::bind_rows(dataPackets) %>%
   mutate(bytes = 24 * num_dcs, # Every 24 bytes sent in an uplink or downlink packet cost 1 DC = $.00001.
-         date = as.POSIXct(time, origin = "1970-01-01")) %>%
+         date = as.POSIXct(time, origin = "1970-01-01"),
+         date = ceiling_date(date, "day")) %>% # reduce the precision of the date to ease the plotting
   mutate_at(c("transaction_hash", "gateway"), as.factor) %>%
   select(-time, -num_dcs) %>%
   rename(hotspot = gateway) 
@@ -67,22 +70,37 @@ dataPackets <- dplyr::bind_rows(dataPackets) %>%
 dataPackets <- distinct(dataPackets) #TODO find outs why there are so many duplicated rows in the data
 ```
 
-Now, we need to add the location of the hotspots. Helium use a system called H3. H3 is a geospatial indexing system using a hexagonal grid that can be (approximately) subdivided into finer and finer hexagonal grids. Instead of working with longitude and latitude, hotspots are positionned in hexagons. This approach is very useful and we could in theory work with the H3 indexing. Plotting functions in R are however more adapted to work with latitudes and longitudes so we will have to convert H3 to this. Note that below, we will reconvert these coordinate in hexagons. There is probably a way to skip that part. 
+Now, we need to add the location of the hotspots. Helium use a system called the Uber's H3 index. H3 is a geospatial indexing system using a hexagonal grid, with higher resolutions covering a larger area, and the smallest resolution covering centimeters of the earth. Helium uses the resolution 8. To give an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)). It is a bit too much to plot if we want to visualise this, that's why we will decrease the resolution to resolution 3 (41,162 hexagons) and then convert the H3 in latitude/longitude for plotting. Note that instead of downsizing the H3 resolution, we could convert the original H3 into lat/lng and bin the hotspots into hexagons ourselves ([link](https://stackoverflow.com/questions/39296198/operation-between-stat-summary-hex-plots-made-in-ggplot2/39300644)).
 
+## Hotspot data
 ```{r}
 ### Retrieve info on the gateway
-dataGateway <- fread(file = "data/gateway_inventory_01213771.csv.gz") %>%
+dataHotspot <- fread(file = "data/gateway_inventory_01213771.csv.gz") %>%
   select(address, owner, first_timestamp, location_hex) %>%
   rename(hotspot = address,
          firstDate = first_timestamp) %>%
   filter(location_hex != "", # remove hotspots without location
-         firstDate != as.POSIXct("1970-01-01 00:00:00", tz = "UTC"))  %>% # a few hotspots appears to have been installed in 1970. This is obviously a mistake in the data base.
-  mutate(data.frame(h3_to_geo(location_hex))) # convert h3 to lat and lng
+         firstDate != as.POSIXct("1970-01-01 00:00:00", tz = "UTC")) # a few hotspots appears to have been installed in 1970. This is obviously a mistake in the data base.
+
+dataHotspot <- dataHotspot %>%
+  mutate(data.frame(h3_to_geo(location_hex))) %>% # get the centers of the given H3 indexes
+  mutate(h3LowRes = geo_to_h3(c(lat, lng), res = 3)) %>% # convert lat/lng to h3 resolution 2 
+  mutate(data.frame(h3_to_geo(h3LowRes))) # get the centers of H3 
 ```
+
+## Combine all data
+
+```{r}
+dataPacketsWithLocation <- inner_join(dataPackets, dataHotspot) # combine the two dataset by keeping all rows both in X and Y
+```
+
+# Results
+
+## Hotspot statistics and visualisation
 
 First info we can get is the number of hotspot per owner. 
 ```{r}
-nHotspotsPerOwner <- dataGateway %>% 
+nHotspotsPerOwner <- dataHotspot %>% 
   group_by(owner) %>%
   summarise(count = n()) %>%
   arrange(desc(count))
@@ -100,7 +118,7 @@ ggplot(filter(nHotspotsPerOwner, count <= 100), aes(count)) +
 We can also visualize the growth of the network in terms of number of hotspots. 
 
 ```{r}
-nHotspotsPerDate <- dataGateway %>% 
+nHotspotsPerDate <- dataHotspot %>% 
   group_by(firstDate) %>%
   summarise(count = n()) 
 
@@ -113,22 +131,10 @@ ggplot(nHotspotsPerDate, aes(x = firstDate, y = cumsum(count))) +
                      breaks = seq(0, 5*10^5, length = 6))
 ```
 
-
-Combine all data
-
-```{r}
-dataPacketsWithLocation <- inner_join(dataPackets, dataGateway) # combine the two dataset by keeping all rows both in X and Y
-```
-
-
-
-The client is the hotspot that witnessed the data packet and the owner is the wallet that paid for the data packet.
-
-# Create a map
+Now we can visualise the growth of the network in terms of hotspots. Let's start by creating an empty world map.
 
 ```{r}
 world <- map_data("world")
-
 map <- ggplot() +
   geom_map(
     data = world, map = world,
@@ -137,6 +143,17 @@ map <- ggplot() +
   
 map
 ```
+
+
+
+
+
+
+The client is the hotspot that witnessed the data packet and the owner is the wallet that paid for the data packet.
+
+
+Now we will overlay the Helium data:
+
 https://stackoverflow.com/questions/46556375/how-to-convert-x-y-coordinates-to-hexbin-center-coordinates
 
 ```{r}
@@ -147,12 +164,12 @@ makeHexData <- function(df) {
             cid = h@cell)
 }
 
-## find the bounds for the complete data 
+## find the bounds for the complete data
 xbnds <- range(dataPacketsWithLocation$lng)
 ybnds <- range(dataPacketsWithLocation$lat)
 nbins <- 100
 
-dataHexagon <- dataPacketsWithLocation %>%
+dataHexagon2 <- dataPacketsWithLocation %>%
   group_by(date) %>%
   group_modify(~ makeHexData(.x))
 
@@ -160,7 +177,7 @@ pBytesPerDay <- map +
     geom_hex(aes(x = x, y = y, fill = log10(bytesPerDay)),
              stat = "identity", 
              alpha = 0.8,
-             data = dataHexagon) +
+             data = dataHexagon2[c(1000:1010),]) +
     scale_fill_gradientn (colours = c("green","red")) 
 
 anim <- pBytesPerDay + 
@@ -168,7 +185,25 @@ anim <- pBytesPerDay +
   labs(title = "Date: {closest_state}",
           subtitle = 'Frame {frame} of {nframes}') 
 
-animate(anim, nframes = 8)
+animate(anim)
+
+dataHexagon <- dataPacketsWithLocation %>%
+  group_by(date, lat, lng) %>%
+  summarise(bytesPerDay = sum(bytes))
+
+pBytesPerDay <- map +
+    geom_hex(aes(x = lng, y = lat, fill = log10(bytesPerDay)),
+             stat = "identity", 
+             alpha = 0.8,
+             data = dataHexagon[c(1000:1010),]) +
+    scale_fill_gradientn (colours = c("green","red")) 
+
+anim <- pBytesPerDay + 
+  transition_states(as.factor(date)) +
+  labs(title = "Date: {closest_state}",
+          subtitle = 'Frame {frame} of {nframes}') 
+
+animate(anim)
 ```
 
 
@@ -177,7 +212,7 @@ animate(anim, nframes = 8)
 
 ```
 
-Now we will overlay the Helium data:
+
 
 https://aberdeenstudygroup.github.io/studyGroup/lessons/Visualising%20Spatial%20Data/Visualising_Spatial_Data_in_R/
 https://ghanadatastuff.com/post/3d_population_density/
@@ -234,7 +269,10 @@ mapPolygon
 # fig
 ```
 
+If you wish to help us continue researching and writting about data science on blockchain, don't hesitate to make a donation to our Ethereum address (0xf5fC137E7428519969a52c710d64406038319169) or Tezos address (tz1ffZLHbu9adcobxmd411ufBDcVgrW14mBd).
 
-https://plotly-r.com/animating-views.html
-https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/
+# References
+
+<https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/>
 https://towardsdatascience.com/exploring-the-helium-network-with-graph-theory-66cbb8bffff9
+<https://docs.helium.com/>
