@@ -9,7 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 rm(list=ls())
-knitr::opts_chunk$set(echo = T, warning = F, message = F, cache = T, out.width = '100%')
+knitr::opts_chunk$set(echo = T, warning = F, message = F, cache = F, out.width = '100%')
 ```
 
 **Thomas is Senior Data Scientist at Pharmalex. He is passionate about the incredible possibility that blockchain technology offers to make the world a better place. You can contact him on [Linkedin](https://www.linkedin.com/in/tdemarchin/) or [Twitter](https://twitter.com/tdemarchin).**
@@ -18,12 +18,27 @@ knitr::opts_chunk$set(echo = T, warning = F, message = F, cache = T, out.width =
 
 # Introduction
 
+***What is the Blockchain:*** A blockchain is a growing list of records, called blocks, that are linked together using cryptography. It is used for recording transactions, tracking assets, and building trust between participating parties. Primarily known for Bitcoin and cryptocurrencies application, Blockchain is now used in almost all domains, including supply chain, healthcare, logistic, identity management... Some blockchains are public and can be accessed from everyone while some are private. Hundreds of blockchains exist with their own specifications and applications: Bitcoin, Ethereum, Tezos...  
+***What is Helium:*** Helium is a decentralized wireless infrastructure. It is a blockchain that leverages a decentralized global network of Hotspots. A hotspot is a sort of a modem with an antenna, to provide long-range connectivity (it can reach 200 times farther than conventional Wi-Fi!) between wireless “internet of things” (IoT) devices, it can be environmental sensors to monitor air quality or for agricultural purpose, it can also be localisation sensors to track bike fleets. People are incentivized to install hotspots and participate to the network by earning Helium tokens, which can be bought and sold like any other cryptocurrency. To learn more about Helium, read this excellent [article](https://www.nytimes.com/2022/02/06/technology/helium-cryptocurrency-uses.html).
+
+***What is R:*** R language is widely used among statisticians and data miners for developing data analysis software. 
+
+This is the third article on a series of articles on interaction with blockchains using R. Part I focuses on some basic concepts related to blockchain, including how to read the blockchain data. Part II focuses on how to get NFTs data transactions and how to visualise it. If you haven't read them, I strongly encourage you to do so to get familiar with the tools and terminology we use in this second article: [Part I](https://towardsdatascience.com/data-science-on-blockchain-with-r-afaf09f7578c) and [Part II](https://towardsdatascience.com/data-science-on-blockchain-with-r-part-ii-tracking-the-nfts-c054eaa93fa). 
+
+I love the Helium project because it is not just about finance like many other blockchain projects but it has real-world applications. It solves problems that exist for people outside the crypto world and that is awesome.
+Looking at Helium data is a whole new step. It is not only a simple curiosity, I believe people needs access to metrics and statistics to take good decisions and they might find our work useful. So coming back to your question, our present goal in regard to Helium network is to visualise the growth of the network and to quantify its usage. This time, it is a bit harder to get the data because we need all historical data for all hotspots so that means we need to retrieve the full blockchain, which is about several TB of data.
+
+
 To fetch the data, we can:
 
   - Set-up an ETL
   - Download data from the Metabase Dewi ETL
   - Use the API
   - Download data dump from http://18.212.212.108:8000/ 
+
+
+
+# Data
 
 ```{r}
 # First, let's load a few useful packages
@@ -35,44 +50,18 @@ library(gganimate)
 library(hexbin)
 library(h3)
 library(lubridate)
+library(maps)
 ```
 
-# Data
+When you work with big dataset, it can get (very) slow. Here are two tricks to speed-up a bit: (1) work with packages/function adapted to handle large dataset and (2) try to keep only the data you need to save memory.
+We use here the *fread* from the *data.table* package is similar to *read.table* but it is much faster, more convenient and it takes care of decompressing files automatically.
 
-## Packet data
+# Hotspot statistics and visualisation
 
-fread from the data.table package is similar to read.table but much faster and more convenient. It takes care of decompressing files automatically.
+First thing we need is information about the hotspots such as their location and when they were seen for the first time by the network.
 
-When you work with big data, the key is to eliminate the data you don't need to save memory.
+For the location, Helium use a system called the Uber's H3 index. H3 is a geospatial indexing system using a hexagonal grid, with higher resolutions covering a larger area, and the smallest resolution covering centimeters of the earth. Helium uses the resolution 8. To give an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)). It is a bit too much to plot if we want to visualise this, that's why we will decrease the resolution to resolution 3 (41,162 hexagons) and then convert the H3 in latitude/longitude for plotting. Note that instead of downsizing the H3 resolution, we could convert the original H3 into lat/lng and bin the hotspots into hexagons ourselves and plot them using geom_hex(). ([link](https://stackoverflow.com/questions/39296198/operation-between-stat-summary-hex-plots-made-in-ggplot2/39300644)).
 
-```{r}
-### Retrieve transferred data packed data
-listFilesPackets <- list.files("data/packets", pattern=".csv.gz", recursive = T)
-
-# We specify the columns we want to keep directly in the fread call to save memory
-# dataPackets <- lapply(1:length(listFilesPackets),function(i){
-dataPackets <- lapply(1:6,function(i){
-  
-  print(i)
-  data <- fread(file = paste0("data/packets/",listFilesPackets[i]), select = c("block", "transaction_hash", "time", "gateway", "num_dcs")) 
-  
-  return(data)
-})
-
-dataPackets <- dplyr::bind_rows(dataPackets) %>%
-  mutate(bytes = 24 * num_dcs, # Every 24 bytes sent in an uplink or downlink packet cost 1 DC = $.00001.
-         date = as.POSIXct(time, origin = "1970-01-01"),
-         date = ceiling_date(date, "day")) %>% # reduce the precision of the date to ease the plotting
-  mutate_at(c("transaction_hash", "gateway"), as.factor) %>%
-  select(-time, -num_dcs) %>%
-  rename(hotspot = gateway) 
-
-dataPackets <- distinct(dataPackets) #TODO find outs why there are so many duplicated rows in the data
-```
-
-Now, we need to add the location of the hotspots. Helium use a system called the Uber's H3 index. H3 is a geospatial indexing system using a hexagonal grid, with higher resolutions covering a larger area, and the smallest resolution covering centimeters of the earth. Helium uses the resolution 8. To give an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)). It is a bit too much to plot if we want to visualise this, that's why we will decrease the resolution to resolution 3 (41,162 hexagons) and then convert the H3 in latitude/longitude for plotting. Note that instead of downsizing the H3 resolution, we could convert the original H3 into lat/lng and bin the hotspots into hexagons ourselves ([link](https://stackoverflow.com/questions/39296198/operation-between-stat-summary-hex-plots-made-in-ggplot2/39300644)).
-
-## Hotspot data
 ```{r}
 ### Retrieve info on the gateway
 dataHotspot <- fread(file = "data/gateway_inventory_01213771.csv.gz") %>%
@@ -88,15 +77,7 @@ dataHotspot <- dataHotspot %>%
   mutate(data.frame(h3_to_geo(h3LowRes))) # get the centers of H3 
 ```
 
-## Combine all data
-
-```{r}
-dataPacketsWithLocation <- inner_join(dataPackets, dataHotspot) # combine the two dataset by keeping all rows both in X and Y
-```
-
-# Results
-
-## Hotspot statistics and visualisation
+## Numer of hotspot per owner
 
 First info we can get is the number of hotspot per owner. 
 ```{r}
@@ -115,23 +96,26 @@ ggplot(filter(nHotspotsPerOwner, count <= 100), aes(count)) +
    scale_y_continuous(trans='log10') 
 ```
 
-We can also visualize the growth of the network in terms of number of hotspots. 
+## Growth of the network in terms of number of hotspots
+
+We can also visualize the growth of the network in terms of number of hotspots. We see three phases: (1) a slow linear increase, (2) and exponential increase in the middle of 2021 followed by (3) a fast linear increase. My opinion is that the exponential increase could have continued a bit more but Hotspot supplies have been limited by the world chips shortage following the Covid pandemy. To give an idea, there was 6 months between my hotspot order and its delivery. 
 
 ```{r}
 nHotspotsPerDate <- dataHotspot %>% 
-  group_by(firstDate) %>%
+  group_by(firstDate, lat, lng) %>%
   summarise(count = n()) 
 
 ggplot(nHotspotsPerDate, aes(x = firstDate, y = cumsum(count))) +
   geom_line() +
   labs(title = "Growth of the hotspots", 
        y = "Total number of hotspot",
-       x = "First apparition on the network") +
+       x = "Date") +
   scale_y_continuous(labels = function(x) format(x, scientific = FALSE),
                      breaks = seq(0, 5*10^5, length = 6))
 ```
 
-Now we can visualise the growth of the network in terms of hotspots. Let's start by creating an empty world map.
+
+Now we can visualize the size of the network in terms of hotspots. We start by creating an empty world map and we then overlay the hotspot data. We see that most hotspots are either in US, Europe or Asia. There are practically no hotspot in Africa, Russia and very little in South America. Surprisingly, we see a few hotspots in the middle of the ocean. It could be data issue or cheating: as the hotspot location has an impact on the reward, some owner try to spoof the system. 
 
 ```{r}
 world <- map_data("world")
@@ -140,139 +124,124 @@ map <- ggplot() +
     data = world, map = world,
     aes(long, lat, map_id = region)
   ) 
+
+nHotspots <- dataHotspot %>% 
+  group_by(lng, lat) %>%
+  summarise(count = n()) 
+
+map +
+    geom_point(aes(x = lng, y = lat, col = count),
+               size = 0.5,
+               alpha = 0.5,
+             data = nHotspots) + 
+  scale_colour_distiller(palette = "Spectral", trans = "log10") +
+  labs(title = "Number of hotspots in the world",
+       colour = "Number of hotspots") +
+  theme(legend.position = "bottom")
+```
+
+Let's summarise this in a nice table. For this, we will leverage the *maps* package.
+TODO: some countries cannot be found. Convert to continent.
+
+```{r}
+dataHotspot <- dataHotspot %>%
+  mutate(country = map.where(database="world", .$lng, .$lat),
+         country = replace_na(country, "Undefined"))
+
+dataHotspot %>%
+  group_by(country) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+
+
+# Packet data
+
+Now, that these hotspots exist, we would like to know if they are useful. Are they used by connected device to transfer data? How often?
+
+To answer this question, we download all the history of data transfer. This is a huge dataset (3GB). On Helium, you only pay data you use. Every 24 bytes sent in an uplink or downlink packet cost 1 Data Credit (DC) = $0.00001. To get an idea of how much the network is used, we can summarise from 2 perspectives: (1) calculate the size of the volume of data exchanged and (2) calculate how often the hotspots are used by the devices.
+
+```{r}
+### Retrieve transferred data packed data
+listFilesPackets <- list.files("data/packets", pattern=".csv.gz", recursive = T)
+
+# We specify the columns we want to keep directly in the fread call to save memory
+dataPackets <- lapply(1:length(listFilesPackets),function(i){
+# dataPackets <- lapply(1:6,function(i){
+
+  data <- fread(file = paste0("data/packets/",listFilesPackets[i]), select = c("block", "transaction_hash", "time", "gateway", "num_dcs")) 
   
-map
+  return(data)
+})
+
+dataPackets <- dplyr::bind_rows(dataPackets) %>%
+  mutate(bytes = 24 * num_dcs, # Every 24 bytes sent in an uplink or downlink packet cost 1 DC = $.00001.
+         date = as.POSIXct(time, origin = "1970-01-01"),
+         date = ceiling_date(date, "day")) %>% # reduce the precision of the date to ease the plotting
+  mutate_at(c("transaction_hash", "gateway"), as.factor) %>%
+  select(-time, -num_dcs) %>%
+  rename(hotspot = gateway) 
+
+# Let's combine the hotspot and packet dataset by keeping all rows both in X and Y
+dataPacketsWithLocation <- inner_join(dataPackets, dataHotspot) 
+```
+
+## Volume of data exchanged
+
+The total volume exchanged between hotspot and connected device so far is calculated below. That's clearly very small (that's about the data volume I made with my smartphone in recent years) but this metric is not a good indication of the Helium usage. Indeed, the network is not intended to transfer huge volume of data but to transfer data on long distance and for a cheap price. Any comparison with any other data transfer technology would not make sense. Let's check another metric.
+```{r}
+paste(round(sum(dataPacketsWithLocation$bytes) / 1e+12,3), "TB") # sum and convert Byte to Terabyte
 ```
 
 
+## Number of transactions
 
-
-
-
-The client is the hotspot that witnessed the data packet and the owner is the wallet that paid for the data packet.
-
-
-Now we will overlay the Helium data:
-
-https://stackoverflow.com/questions/46556375/how-to-convert-x-y-coordinates-to-hexbin-center-coordinates
+Each data transfer between a hotspot and a device corresponds to one transaction on the blockchain. To summarise this, we simply need to count the row to determine the number of transactions. The plot is very similar to the plot above for the number of hotspot: a slow linear phase followed by an exponential and then a fast linear phases (but what is this glitch?).
 
 ```{r}
-makeHexData <- function(df) {
- h <- hexbin(df$lng, df$lat, nbins, xbnds = xbnds, ybnds = ybnds, IDs = TRUE)
- data.frame(hcell2xy(h),
-            bytesPerDay = tapply(df$bytes, h@cID, FUN = function(z) sum(z)),
-            cid = h@cell)
-}
-
-## find the bounds for the complete data
-xbnds <- range(dataPacketsWithLocation$lng)
-ybnds <- range(dataPacketsWithLocation$lat)
-nbins <- 100
-
-dataHexagon2 <- dataPacketsWithLocation %>%
-  group_by(date) %>%
-  group_modify(~ makeHexData(.x))
-
-pBytesPerDay <- map +
-    geom_hex(aes(x = x, y = y, fill = log10(bytesPerDay)),
-             stat = "identity", 
-             alpha = 0.8,
-             data = dataHexagon2[c(1000:1010),]) +
-    scale_fill_gradientn (colours = c("green","red")) 
-
-anim <- pBytesPerDay + 
-  transition_states(as.factor(date)) +
-  labs(title = "Date: {closest_state}",
-          subtitle = 'Frame {frame} of {nframes}') 
-
-animate(anim)
-
-dataHexagon <- dataPacketsWithLocation %>%
+nTransactionsPerDate <- dataPacketsWithLocation %>%
   group_by(date, lat, lng) %>%
-  summarise(bytesPerDay = sum(bytes))
+  summarise(numberOfTransactions = n())
 
-pBytesPerDay <- map +
-    geom_hex(aes(x = lng, y = lat, fill = log10(bytesPerDay)),
-             stat = "identity", 
-             alpha = 0.8,
-             data = dataHexagon[c(1000:1010),]) +
-    scale_fill_gradientn (colours = c("green","red")) 
+ggplot(nTransactionsPerDate, aes(x = date, y = cumsum(numberOfTransactions))) +
+  geom_line() +
+  labs(title = "Growth of the number of data transfer between hotspots and devices", 
+       y = "Total number of data transfer",
+       x = "Date") +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE))
+```
 
-anim <- pBytesPerDay + 
-  transition_states(as.factor(date)) +
+As we did above, we can plot the world map, overlay with the number of data transactions. This time, let's create an animation using the *gganimate* package. Surprinsingly, altough we saw there are a lot of hotspots in Asia, they don't seem to be used much to transfer data in contrast to US and Europe.
+
+```{r}
+nTransactionsPerDateAnimated <- dataPacketsWithLocation %>%
+  mutate(date = ceiling_date(date, "week")) %>% # let's decrease the resolution to ease plotting
+  group_by(date, lat, lng) %>%
+  summarise(numberOfTransactions = n())
+
+pNumberOfTransactionsAnimated <- map +
+    geom_point(aes(x = lng, y = lat, col = numberOfTransactions),
+               size = 0.5,
+               alpha = 0.5,
+             data = nTransactionsPerDateAnimated) + 
+  scale_colour_distiller(palette = "Spectral", trans = "log10")
+
+anim <- pNumberOfTransactionsAnimated + 
+  transition_states(date) +
   labs(title = "Date: {closest_state}",
           subtitle = 'Frame {frame} of {nframes}') 
 
-animate(anim)
+animate(anim, nframes = length(unique(nTransactionsPerDateAnimated$date)))
 ```
 
-
-
-```{r}
-
-```
-
-
-
-https://aberdeenstudygroup.github.io/studyGroup/lessons/Visualising%20Spatial%20Data/Visualising_Spatial_Data_in_R/
+Faire ceci avec les US!
 https://ghanadatastuff.com/post/3d_population_density/
 
-```{r}
-mapScatter <- map +
-  geom_point(
-    data = dataCreditWithLocation[1:10000,],
-    aes(Long, Lat),
-    color = "green",
-    alpha = 0.7, 
-    size = 0.01)
 
-mapPolygon <- map +
-  stat_density_2d(
-    data = dataCreditWithLocation[1:10000,],
-    aes(x = Long, y = Lat, fill = ..level..),
-    geom = "polygon") + scale_fill_gradient2(low = "blue", 
-                       mid = "green", 
-                       high = "red")
-mapPolygon
-```
-
-```{r}
-# 
-# fig <-  plot_ly(
-#     type = 'densitymapbox',
-#     lat = ~Lat,
-#     lon = ~Long,
-#     z = ~ Packets,
-#     frame = ~Time,
-#     coloraxis = 'coloraxis',
-#     data = dataCreditWithLocation[1:100000,],
-#     radius = 1) %>%
-#   layout(
-#     mapbox = list(
-#       style="stamen-terrain",
-#       center= list(lon=180)), 
-#     coloraxis = list(colorscale = "Viridis"))
-# 
-# fig
-# 
-# fig <-  plot_ly(
-#     type = 'scattermapbox',
-#     lat = ~Lat,
-#     lon = ~Long,
-#     frame = ~Time,
-#     color = ~log(Packets),
-#     data = dataCreditWithLocation[1:100000,]) %>%
-#   layout(
-#     mapbox = list(
-#       style="stamen-terrain"))
-# 
-# fig
-```
 
 If you wish to help us continue researching and writting about data science on blockchain, don't hesitate to make a donation to our Ethereum address (0xf5fC137E7428519969a52c710d64406038319169) or Tezos address (tz1ffZLHbu9adcobxmd411ufBDcVgrW14mBd).
 
 # References
 
 <https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/>
-https://towardsdatascience.com/exploring-the-helium-network-with-graph-theory-66cbb8bffff9
 <https://docs.helium.com/>
