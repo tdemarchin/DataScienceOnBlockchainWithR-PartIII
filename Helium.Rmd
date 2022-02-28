@@ -50,7 +50,8 @@ library(gganimate)
 library(hexbin)
 library(h3)
 library(lubridate)
-library(maps)
+library(sp)
+library(rworldmap)
 ```
 
 When you work with big dataset, it can get (very) slow. Here are two tricks to speed-up a bit: (1) work with packages/function adapted to handle large dataset and (2) try to keep only the data you need to save memory.
@@ -60,7 +61,7 @@ We use here the *fread* from the *data.table* package is similar to *read.table*
 
 First thing we need is information about the hotspots such as their location and when they were seen for the first time by the network.
 
-For the location, Helium use a system called the Uber's H3 index. H3 is a geospatial indexing system using a hexagonal grid, with higher resolutions covering a larger area, and the smallest resolution covering centimeters of the earth. Helium uses the resolution 8. To give an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)). It is a bit too much to plot if we want to visualise this, that's why we will decrease the resolution to resolution 3 (41,162 hexagons) and then convert the H3 in latitude/longitude for plotting. Note that instead of downsizing the H3 resolution, we could convert the original H3 into lat/lng and bin the hotspots into hexagons ourselves and plot them using geom_hex(). ([link](https://stackoverflow.com/questions/39296198/operation-between-stat-summary-hex-plots-made-in-ggplot2/39300644)).
+For the location, Helium use a system called the Uber's H3 index. H3 is a geospatial indexing system using a hexagonal grid, with higher resolutions covering a larger area, and the smallest resolution covering centimeters of the earth. Helium uses the resolution 8. To give an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)). In order to process the data, we convert the H3 into lat/lng using the *H3* package. 
 
 ```{r}
 ### Retrieve info on the gateway
@@ -72,9 +73,7 @@ dataHotspot <- fread(file = "data/gateway_inventory_01213771.csv.gz") %>%
          firstDate != as.POSIXct("1970-01-01 00:00:00", tz = "UTC")) # a few hotspots appears to have been installed in 1970. This is obviously a mistake in the data base.
 
 dataHotspot <- dataHotspot %>%
-  mutate(data.frame(h3_to_geo(location_hex))) %>% # get the centers of the given H3 indexes
-  mutate(h3LowRes = geo_to_h3(c(lat, lng), res = 3)) %>% # convert lat/lng to h3 resolution 2 
-  mutate(data.frame(h3_to_geo(h3LowRes))) # get the centers of H3 
+  mutate(data.frame(h3_to_geo(location_hex))) # get the centers of the given H3 indexes
 ```
 
 ## Numer of hotspot per owner
@@ -115,42 +114,76 @@ ggplot(nHotspotsPerDate, aes(x = firstDate, y = cumsum(count))) +
 ```
 
 
-Now we can visualize the size of the network in terms of hotspots. We start by creating an empty world map and we then overlay the hotspot data. We see that most hotspots are either in US, Europe or Asia. There are practically no hotspot in Africa, Russia and very little in South America. Surprisingly, we see a few hotspots in the middle of the ocean. It could be data issue or cheating: as the hotspot location has an impact on the reward, some owner try to spoof the system. 
+Now we can visualize the size of the network in terms of hotspots. We start by creating an empty world map and we then overlay the hotspot data. Plotting all the individual hotspot on a map will just be too much, we need to bin the hotspots into hexagons ([function here](https://stackoverflow.com/questions/39296198/operation-between-stat-summary-hex-plots-made-in-ggplot2/39300644)) and we can then plot them using geom_hex(). 
+
+We see that most hotspots are either in US, Europe or Asia. There are practically no hotspot in Africa, Russia and very little in South America. Surprisingly, we see a few hotspots in the middle of the ocean. It could be data issue or cheating: as the hotspot location has an impact on the reward, some owner try to spoof the system. 
 
 ```{r}
+# create an empty world map
 world <- map_data("world")
 map <- ggplot() +
   geom_map(
     data = world, map = world,
+    alpha = 0.6,
     aes(long, lat, map_id = region)
-  ) 
+  ) + 
+  scale_y_continuous(breaks=NULL) +
+  scale_x_continuous(breaks=NULL) 
 
-nHotspots <- dataHotspot %>% 
-  group_by(lng, lat) %>%
-  summarise(count = n()) 
+# bin the hotspot into hexagons
+makeHexData <- function(df, nbins) {
+  
+ ## find the bounds for the complete data
+ xbnds <- range(df$lng)
+ ybnds <- range(df$lat)
+ h <- hexbin(df$lng, df$lat, nbins, xbnds = xbnds, ybnds = ybnds, IDs = TRUE)
+ data.frame(hcell2xy(h),
+            count = tapply(df$hotspot, h@cID, FUN = function(z) length(z)), # calculate the number of row as the number of transactions
+            cid = h@cell)
+}
+ 
+nHotspots <- dataHotspot %>%
+  group_modify(~ makeHexData(.x, nbins = 500))
 
 map +
-    geom_point(aes(x = lng, y = lat, col = count),
-               size = 0.5,
-               alpha = 0.5,
-             data = nHotspots) + 
-  scale_colour_distiller(palette = "Spectral", trans = "log10") +
+  geom_hex(aes(x = x, y = y, fill = count),
+             stat = "identity", 
+             alpha = 0.8,
+             data = nHotspots) +
+    scale_fill_distiller(palette = "Spectral", trans = "log10") +
   labs(title = "Number of hotspots in the world",
        colour = "Number of hotspots") +
   theme(legend.position = "bottom")
 ```
 
-Let's summarise this in a nice table. For this, we will leverage the *maps* package.
-TODO: some countries cannot be found. Convert to continent.
+Let's summarise this in a nice table. For this, we will leverage the *rworldmap* package with a custom function from [here](https://stackoverflow.com/questions/21708488/get-country-and-continent-from-longitude-and-latitude-point-in-r) to convert lng/lat into the continents.
+
 
 ```{r}
+# The single argument to this function, points, is a data.frame in which:
+#   - column 1 contains the longitude in degrees
+#   - column 2 contains the latitude in degrees
+coords2continent = function(points)
+{  
+  countriesSP <- getMap(resolution='low')
+
+  # converting points to a SpatialPoints object setting CRS directly to that from rworldmap
+  pointsSP = SpatialPoints(points, proj4string=CRS(proj4string(countriesSP)))  
+
+  # use 'over' to get indices of the Polygons object containing each point 
+  indices = over(pointsSP, countriesSP)
+
+  indices$REGION   # returns the continent (7 continent model)
+}
+
 dataHotspot <- dataHotspot %>%
-  mutate(country = map.where(database="world", .$lng, .$lat),
-         country = replace_na(country, "Undefined"))
+  mutate(continent = coords2continent(data.frame(.$lng, .$lat)),
+         continent = replace_na(as.character(continent), "Undefined"))
 
 dataHotspot %>%
-  group_by(country) %>%
+  group_by(continent) %>%
   summarise(count = n()) %>%
+  mutate(percentage = round(count/sum(count)*100,2)) %>%
   arrange(desc(count))
 ```
 
@@ -214,6 +247,14 @@ ggplot(nTransactionsPerDate, aes(x = date, y = cumsum(numberOfTransactions))) +
 As we did above, we can plot the world map, overlay with the number of data transactions. This time, let's create an animation using the *gganimate* package. Surprinsingly, altough we saw there are a lot of hotspots in Asia, they don't seem to be used much to transfer data in contrast to US and Europe.
 
 ```{r}
+bytesPerDay = tapply(df$bytes, h@cID, FUN = function(z) sum(z))
+
+
+
+
+
+
+
 nTransactionsPerDateAnimated <- dataPacketsWithLocation %>%
   mutate(date = ceiling_date(date, "week")) %>% # let's decrease the resolution to ease plotting
   group_by(date, lat, lng) %>%
