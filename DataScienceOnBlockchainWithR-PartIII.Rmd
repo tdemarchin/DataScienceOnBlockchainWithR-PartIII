@@ -18,16 +18,18 @@ knitr::opts_chunk$set(echo = T,
 
 ```
 
+![Helium, the people's network. Photo from [Nima Mot](https://unsplash.com/@nimamot) on [Unsplash](https://unsplash.com/photos/4eFyWGPhvoo).](figures/nima-mot-unsplash.jpg)
+
 **Thomas is Senior Data Scientist at Pharmalex. He is passionate about the incredible possibility that blockchain technology offers to make the world a better place. You can contact him on [Linkedin](https://www.linkedin.com/in/tdemarchin/) or [Twitter](https://twitter.com/tdemarchin).**
 
 **Milana is Data Scientist at Pharmalex. She is passionate about the power of analytical tools to discover the truth about the world around us and guide decision making. You can contact her on [Linkedin](https://www.linkedin.com/in/mfilatenkova/).**
 
-![Helium, the people's network. Photo from [Nima Mot](https://unsplash.com/@nimamot) on [Unsplash](https://unsplash.com/photos/4eFyWGPhvoo).](figures/nima-mot-unsplash.jpg)
+A HTML version of this article with high resolution figures and tables is available [here](https://rawcdn.githack.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII/ffb43fb9a343695440e00da49b85ba7b7c5a5536/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
 
 # Introduction
 
 ***What is the Blockchain:*** A blockchain is a growing list of records, called blocks, that are linked together using cryptography. It is used for recording transactions, tracking assets, and building trust between participating parties. Primarily known for Bitcoin and cryptocurrencies application, Blockchain is now used in almost all domains, including supply chain, healthcare, logistic, identity management... Some blockchains are public and can be accessed from everyone while some are private. Hundreds of blockchains exist with their own specifications and applications: Bitcoin, Ethereum, Tezos...  
-***What is Helium:*** Helium is a decentralized wireless infrastructure. It is a blockchain that leverages a decentralized global network of Hotspots. A hotspot is a sort of a modem with an antenna, to provide long-range connectivity (it can reach 200 times farther than conventional Wi-Fi!) between wireless “internet of things” (IoT) devices. These devices can be environmental sensors to monitor air quality or for agricultural purpose, localisation sensors to track bike fleets,... People are incentivized to install hotspots and become a part of the network by earning Helium tokens, which can be bought and sold like any other cryptocurrency. To learn more about Helium, read this excellent [article](https://www.nytimes.com/2022/02/06/technology/helium-cryptocurrency-uses.html). 
+***What is Helium:*** Helium is a decentralized wireless infrastructure. It is a blockchain that leverages a decentralized global network of Hotspots. A hotspot is a sort of a modem with an antenna, to provide long-range connectivity (it can reach 200 times farther than conventional Wi-Fi!) between wireless “internet of things” (IoT) devices. These devices can be environmental sensors to monitor air quality or for agricultural purpose, localisation sensors to track bike fleets... People are incentivized to install hotspots and become a part of the network by earning Helium tokens, which can be bought and sold like any other cryptocurrency. To learn more about Helium, read this excellent [article](https://www.nytimes.com/2022/02/06/technology/helium-cryptocurrency-uses.html). 
 
 ***What is R:*** R language is widely used among statisticians and data miners for developing data analysis software. 
 
@@ -35,7 +37,7 @@ This is the third article on a series of articles on interaction with blockchain
 
 Helium is an amazing project. Unlike traditional blockchain related project, it is not just about finance but it has real-world applications. It is intended to help solves problems outside the crypto world, which is awesome! In the past, deploying a communication infrastructure was only possible for big companies. Thanks to the blockchain, this is now accessible to collectives of individuals.
 
-While a lot of content is available about the coverage aspect of Helium and how to correctly position your antenna to maximize your revenue, little is available about the real use of the network by connected devices and this is what we would like to address here. In this article, we attempt to examinate a current snapshot of Helium blockchain by answering the following questions: 
+While a lot of content is available about the coverage aspect of Helium and how to correctly position your antenna to maximize your revenue, little is available about the real use of the network by connected devices. In this article, we attempt to examinate a current snapshot of Helium blockchain by answering the following questions: 
 
 - How big is the Helium network? 
 - Where are located the hotspots? 
@@ -55,13 +57,11 @@ When you work with big dataset, it can get very slow. Here are two tricks to spe
   
   2. Try to keep only the data you need to save memory. Discard any data you won't use such as columns with unimportant attributes, as well as delete heavy objects you no longer need.
 
-A HTML version of this article as well as the code used to generate it is available on my Github.
-
 # Hotspots
 
 ## Data
 
-The code below is intented to read chain data about the hotspots and perform some data management. We use the the *H3* package to convert the Uber's H3 index into latitude/longitude. H3 is a geospatial indexing system using a hierarchical hexagonal grid. H3 supports sixteen resolutions, and each finer resolution has cells with one seventh the area of the coarser resolution. Helium uses the resolution 8. To give you an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)).
+The code below is intended to read chain data about the hotspots and perform some data management. We use the *H3* package to convert the Uber's H3 index into latitude/longitude. H3 is a geospatial indexing system using a hierarchical hexagonal grid. H3 supports sixteen resolutions, and each finer resolution has cells with one seventh the area of the coarser resolution. Helium uses the resolution 8. To give you an idea, with this resolution, the earth is covered by 691,776,122 hexagons (see [here](https://h3geo.org/docs/core-library/restable/)).
 
 ```{r}
 # Load a few useful packages
@@ -83,8 +83,8 @@ options(rgl.useNULL = TRUE,
 library(rgl)
 library(rayshader)
 
-### Retrieve info on the hotspots
-# dataHotspots <- fread(file = "data/gateway_inventory_01257002.csv.gz", select = c("address", "owner", "first_timestamp", "location_hex")) %>%
+# ### Retrieve info on the hotspots
+# dataHotspots <- fread(file = "data/gateway_inventory_01266692.csv.gz", select = c("address", "owner", "first_timestamp", "location_hex")) %>%
 #   rename(hotspot = address,
 #          firstDate = first_timestamp) %>%
 #   filter(location_hex != "", # remove hotspots without location
@@ -132,10 +132,10 @@ dataHotspots %>%
   group_by(`Number of hotspots per owner`) %>%
   summarise(`Number of owners` = n()) %>%
   mutate(`Proportion (%)` = round(`Number of owners`/sum(`Number of owners`)*100,2)) %>%
-  kable(caption = "Distribution of the hotspots across owners.")
+  kable(caption = "Hotspots distribution across owners.")
 ```
 
-There are more than 500k hotspots in the world, that is a lot. These hotspots didn't appear in one day. In Figure \@ref(fig:pGrowthNetworkHotspot), we visualize the growth of the network in terms of how many hotspots were added to the network over time, using a cumulative plot. We see three phases: (1) a slow linear increase, (2) an exponential increase in the middle of 2021 followed by (3) a fast linear increase. In my opinion, the exponential phase could have continued further but has saturated due to the limited hotspot supply that happened because of world chips shortage following the Covid pandemy. To give you an idea, there was a 6 months lag between my hotspot order and its delivery. 
+There are more than 500k hotspots in the world, that is a lot. These hotspots didn't appear in one day. In Figure \@ref(fig:pGrowthNetworkHotspot), we visualize the growth of the network in terms of how many hotspots were added to the network over time, using a cumulative plot. We see three phases: (1) a slow linear increase, (2) an exponential increase in the middle of 2021 followed by (3) a fast linear increase. In my opinion, the exponential phase could have continued further but has saturated due to the limited hotspot supply that happened because of world chips shortage following the Covid pandemic. To give you an idea, there was a 6 months lag between my hotspot order and its delivery. 
 
 ```{r pGrowthNetworkHotspot, out.width = '75%', fig.cap = 'Cumulative plot of the growth of the network infrastructure in terms of number of hotspots added to the network.'}
 nHotspotsPerDate <- dataHotspots %>% 
@@ -225,7 +225,7 @@ dataHotspots %>%
   summarise(count = n()) %>%
   mutate(percentage = round(count/sum(count)*100,2)) %>%
   arrange(desc(count)) %>%
-  kable(caption = "Distribution of hotspots per continent.")
+  kable(caption = "Hotspots distribution per continent.")
 ```
 
 
@@ -255,7 +255,7 @@ On Helium, you only pay for the data you use. Every 24 bytes sent in an uplink o
 #   select(-time, -num_dcs, -transaction_hash) %>%
 #   rename(hotspot = gateway)
 # 
-# # combine the hotspot to the transaction dataset to include the hotspot location 
+# # combine the hotspot to the transaction dataset to include the hotspot location
 # # inner_join keeps all rows available in both X and Y
 # dataTransactionsWithLocation <- inner_join(dataTransactions, dataHotspots) %>%
 #   mutate(hotspot = factor(hotspot, levels = levels(dataHotspots$hotspot))) %>% # this is to avoid dropping levels for hotspots not involved in any transaction
@@ -277,7 +277,7 @@ glimpse(dataTransactionsWithLocation)
 
 Table \@ref(tab:tDesStatTransactions) shows a few descriptive statistics on the transaction dataset as well as the volume of data exchanged so far. Clearly, the amount of data exchanged between hotspots and connected devices is small, this is about as much as the data volume created by my smartphone in recent years. This metric does not seem to be a good indication of the Helium usage. Indeed, the network is not intended to transfer huge volumes of data but rather to transfer data across long distance and for a small price. Below, we will look at the second metric, which is more appropriate in quantifying Helium usage.
 
-Another interesting fact - the first transaction occured on the 2020-05-15 while the first hotspot appeared on the network on 2019-07-31. It means there had been about 14 months delay between the appearance of the first hotspot and the first transaction being made. My guess - this is because a critical number of hotspot was needed to convince connected device manufacturers to work with the network.
+Another interesting fact - the first transaction occurred on the 2020-05-15 while the first hotspot appeared on the network on 2019-07-31. It means there had been about 14 months delay between the appearance of the first hotspot and the first transaction being made. My guess - this is because a critical number of hotspots was needed to convince connected device manufacturers to work with the network.
 
 ```{r tDesStatTransactions}
 dataTransactionsWithLocation %>%
@@ -326,24 +326,8 @@ dataTransactionsWithLocation %>%
   summarise(count = n()) %>%
   mutate(percentage = round(count/sum(count)*100,2)) %>%
   arrange(desc(count)) %>%
-  kable(caption = "Table 3: Distribution of the number of transactions per continent.")
+  kable(caption = "Distribution of the number of transactions per continent.")
 ```
-
-
-**TEST URKRAINE**
-
-```{r}
-test <- dataTransactionsWithLocation %>%
-  filter(country %in% c("Ukraine", "Poland", "Romania", "Moldovia"),
-         date > as.POSIXct("2022-01-01")) %>%
-  group_by(country, date) %>%
-  summarise(count = n())
-
-ggplot(test, aes(x = date, y = count, color = country)) +
-  geom_line() +
-  labs(y ="transactions per day")
-```
-
 
 We can also look at where the top 10 most active hotspots are located. Note that we shall use the *data.table* syntax instead of *dplyr*. As mentioned above, the *dplyr* syntax is preferred for its readability, in this case it takes only 2 seconds for *data.table* while *dplyr* is much slower. We see that the most active hotspot are located in France, US and Canada. 
 
@@ -367,7 +351,7 @@ propWith0Transactions <- length(which(table(dataTransactionsWithLocation$hotspot
 
 The median number of transactions per hotspot (excluding hotspots which didn't participate in any transaction) is `r medianNumberOfTransactions` and `r round(propWith0Transactions, 2)`% hotspots did not participate in any transaction so far. We cannot really say that all hotspots are being exploited... Not yet! The network is still in its infancy and has a lot of spare capacity.
 
-Let us again we visualise the number of transactions on the the world map. We bin the data using the same *makeHexData* function and overlay the map with the number of data transactions. This time, we create a longitudinal animation using the *gganimate* package (Figure \@ref(fig:pMapTransactions)). Although direct comparison with figure \@ref(fig:pGrowthNetworkTransactions) is difficult since we have here an additional dimension (the color refers to the number of transactions), the message is similar. We see that transactions mainly occur in North America before mid 2020, then followed by a strong wave in Europe and Asia. Barely no transaction have occured in South America and Africa. 
+Let us again we visualise the number of transactions on the the world map. We bin the data using the same *makeHexData* function and overlay the map with the number of data transactions. This time, we create a longitudinal animation using the *gganimate* package (Figure \@ref(fig:pMapTransactions)). Although direct comparison with figure \@ref(fig:pGrowthNetworkTransactions) is difficult since we have here an additional dimension (the color refers to the number of transactions), the message is similar. We see that transactions mainly occur in North America before mid 2020, then followed by a strong wave in Europe and Asia. Barely no transaction have occurred in South America and Africa. 
 
 ```{r pMapTransactions, fig.cap = 'Evolution of the number of transactions across the globe.', fig.width = 10, fig.height = 6}
 ## bin the hotspot into hexagons
@@ -401,9 +385,9 @@ anim <- pNumberOfTransactionsAnimated +
 animate(anim, nframes = length(unique(nTransactionsPerDateHexbin$date)))
 ```
 
-To add a bit of visual perspective, we can also turn the plot in 3D using the awesome *rayshader* package. We shall focus on two countries: (1) US as it is the courntry with the biggest number of hotspots and transactions and (2) Belgium, which is my home country. As this time around we intend to generate a static plot instead of an animation, we re-bin the data into hexagons. Note that it is possible to animate this 3D plot but it takes a lot of computing time and fine tuning (see [this](https://ghanadatastuff.com/post/3d_population_density/)).
+To add a bit of visual perspective, we can also turn the plot in 3D using the awesome *rayshader* package. We shall focus on two countries: (1) US as it is the country with the biggest number of hotspots and transactions and (2) Belgium, which is my home country. As this time around we intend to generate a static plot instead of an animation, we re-bin the data into hexagons. Note that it is possible to animate this 3D plot but it takes a lot of computing time and fine tuning (see [this](https://ghanadatastuff.com/post/3d_population_density/)).
 
-Figure \@ref(fig:pMapTransactionsUS) shows the US map. We see that transactions are homogeneously distributed across the country although the peaks of activity (note that the legend is logarithmic!) are located around big cities (New york, Los Angeles, San Francisco, Miami).
+Figure \@ref(fig:pMapTransactionsUS) shows the US map. We see that transactions are homogeneously distributed across the country although the peaks of activity (note that the legend is logarithmic!) are located around big cities (New York, Los Angeles, San Francisco, Miami).
 
 ```{r pMapTransactionsUS, fig.cap = 'Distribution of the transactions in the US. The view can be manipulated with the mouse.'}
 # get the US map
@@ -452,8 +436,8 @@ plot_gg(pNumberOfTransactionsUS,
         theta = 0, 
         phi = 70,
         raytrace = TRUE)
-rgl::rglwidget(width = 800, # this is to print the widget in the html document
-               height = 600) 
+rgl::rglwidget(width = 1024, # this is to print the widget in the html document
+               height = 768) 
 rgl::rgl.close()
 ```
 
@@ -518,7 +502,7 @@ I hope you enjoyed reading this article and have now a better understanding of w
 
 We look forward to receiving your feedback and ideas regarding blockchain topics that deserve to be covered in our next post. If you wish continue learning about chain data analysis using R, please follow me on [Medium](https://tdemarchin.medium.com/), [Linkedin](https://www.linkedin.com/in/tdemarchin/) and/or [Twitter](https://twitter.com/tdemarchin) so you  get alerted of a new article release. Thank you for reading and feel free to reach us if you have questions or comments.
 
-A HTML version of this article as well as the code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
+A HTML version of this article with high resolution figures and tables is available [here](https://rawcdn.githack.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII/ffb43fb9a343695440e00da49b85ba7b7c5a5536/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
 
 I'd like to thank the Dewi team and Helium Discord community (@ediewald, @bigdavekers, @jamiedubs, #data-analysis) for their support and for providing the data.
 
