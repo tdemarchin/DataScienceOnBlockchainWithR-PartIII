@@ -277,7 +277,7 @@ glimpse(dataTransactionsWithLocation)
 
 Table \@ref(tab:tDesStatTransactions) shows a few descriptive statistics on the transaction dataset as well as the volume of data exchanged so far. Clearly, the amount of data exchanged between hotspots and connected devices is small, this is about as much as the data volume created by my smartphone in recent years. This metric does not seem to be a good indication of the Helium usage. Indeed, the network is not intended to transfer huge volumes of data but rather to transfer data across long distance and for a small price. Below, we will look at the second metric, which is more appropriate in quantifying Helium usage.
 
-Another interesting fact - the first transaction occurred on the 2020-05-15 while the first hotspot appeared on the network on 2019-07-31. It means there had been about 14 months delay between the appearance of the first hotspot and the first transaction being made. My guess - this is because a critical number of hotspots was needed to convince connected device manufacturers to work with the network.
+Another interesting fact - the first transaction occurred on the 2020-05-15 while the first hotspot appeared on the network on 2019-07-31. It means there had been about 14 months delay between the appearance of the first hotspot and the first transaction being made. There are two reasons: (1) my initial guess - this is because a critical number of hotspots was needed to convince connected device manufacturers to work with the network and (2) data transfer was free in the beginning and DC transactions were only activated in April 2020 (more [here](https://blog.helium.com/and-were-live-with-data-credits-b022ba8ae8d9)).
 
 ```{r tDesStatTransactions}
 dataTransactionsWithLocation %>%
@@ -521,3 +521,5 @@ Stay tuned!
 <https://explorer.helium.com/>
 
 <https://github.com/tomtobback/helium-data-traffic>
+
+All figures are from authors unless otherwise stated.
