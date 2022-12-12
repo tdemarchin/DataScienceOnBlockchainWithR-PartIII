@@ -24,7 +24,7 @@ knitr::opts_chunk$set(echo = T,
 
 **Milana is Data Scientist at Pharmalex. She is passionate about the power of analytical tools to discover the truth about the world around us and guide decision making. You can contact her on [Linkedin](https://www.linkedin.com/in/mfilatenkova/).**
 
-A HTML version of this article with high resolution figures and tables is available [here](https://rawcdn.githack.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII/ffb43fb9a343695440e00da49b85ba7b7c5a5536/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
+A HTML version of this article with high resolution figures and tables is available [here](https://tdemarchin.github.io/DataScienceOnBlockchainWithR-PartIII/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
 
 # Introduction
 
@@ -82,26 +82,29 @@ options(rgl.useNULL = TRUE,
         rgl.printRglwidget = TRUE)
 library(rgl)
 library(rayshader)
+```
 
-# ### Retrieve info on the hotspots
-# dataHotspots <- fread(file = "data/gateway_inventory_01266692.csv.gz", select = c("address", "owner", "first_timestamp", "location_hex")) %>%
-#   rename(hotspot = address,
-#          firstDate = first_timestamp) %>%
-#   filter(location_hex != "", # remove hotspots without location
-#          firstDate != as.POSIXct("1970-01-01 00:00:00", tz = "UTC")) %>% # a few hotspots appear to have been installed in 1970, this is obviously a mistake in the data base
-#   mutate(data.frame(h3_to_geo(location_hex)),
-#          hotspot = factor(hotspot),
-#          firstDate = round_date(firstDate, "day"), # resolution up to the day is sufficient
-#          owner = factor(owner)) %>% # get the centres of the given H3 indexes
-#   select(-location_hex)
-# 
-# saveRDS(dataHotspots, "data/dataHotspots.rds")
-dataHotspots <- readRDS("data/dataHotspots.rds")
+
+```{r eval = F}
+### Retrieve info on the hotspots
+dataHotspots <- fread(file = "data/gateway_inventory_01266692.csv.gz", select = c("address", "owner", "first_timestamp", "location_hex")) %>%
+  rename(hotspot = address,
+         firstDate = first_timestamp) %>%
+  filter(location_hex != "", # remove hotspots without location
+         firstDate != as.POSIXct("1970-01-01 00:00:00", tz = "UTC")) %>% # a few hotspots appear to have been installed in 1970, this is obviously a mistake in the data base
+  mutate(data.frame(h3_to_geo(location_hex)),
+         hotspot = factor(hotspot),
+         firstDate = round_date(firstDate, "day"), # resolution up to the day is sufficient
+         owner = factor(owner)) %>% # get the centres of the given H3 indexes
+  select(-location_hex)
+
+saveRDS(dataHotspots, "data/dataHotspots.rds")
 ```
 
 This is how the hotspot dataset looks like. We have the address of the hotspot, the address of the owner (an owner is a Helium wallet to which several hotspots can be linked), the date the hotspot was first seen on the network and its location on the globe.
 
 ```{r}
+dataHotspots <- readRDS("data/dataHotspots.rds")
 glimpse(dataHotspots)
 ```
 
@@ -237,41 +240,41 @@ Now, that we understand how the existing hotspots are distributed on the planet 
 
 On Helium, you only pay for the data you use. Every 24 bytes sent in an uplink or downlink packet cost 1 Data Credit (DC) = $0.00001. To get an idea of how much the network is used, we can look at it from two perspectives: (1) check the volume of data exchanged and (2) check how often the hotspots have been involved in data transfer with connected devices. 
 
-```{r}
-# ### Retrieve transferred packed dataset (transactions)
-# listFilesTransactions <- list.files("data/packets", pattern=".csv.gz", recursive = T)
-# 
-# # we specify the columns we want to keep directly in "fread" call to save memory
-# dataTransactions <- lapply(1:length(listFilesTransactions),function(i){
-#   data <- fread(file = paste0("data/packets/",listFilesTransactions[i]), select = c("block", "transaction_hash", "time", "gateway", "num_dcs"))
-#   return(data)
-# })
-# 
-# dataTransactions <- dplyr::bind_rows(dataTransactions) %>%
-#   mutate(bytes = 24 * num_dcs, # Every 24 bytes sent in an uplink or downlink packet cost 1 DC = $.00001.
-#          date = as.POSIXct(time, origin = "1970-01-01"),
-#          date = round_date(date, "day"), # reduce the precision of the date to ease the plotting
-#          gateway = factor(gateway)) %>%
-#   select(-time, -num_dcs, -transaction_hash) %>%
-#   rename(hotspot = gateway)
-# 
-# # combine the hotspot to the transaction dataset to include the hotspot location
-# # inner_join keeps all rows available in both X and Y
-# dataTransactionsWithLocation <- inner_join(dataTransactions, dataHotspots) %>%
-#   mutate(hotspot = factor(hotspot, levels = levels(dataHotspots$hotspot))) %>% # this is to avoid dropping levels for hotspots not involved in any transaction
-#   select(-owner, -firstDate)
-# 
-# # remove these two big dataset to save memory
-# rm("dataHotspots")
-# rm("dataTransactions")
-# 
-# saveRDS(dataTransactionsWithLocation, "data/dataTransactionsWithLocation.rds")
-dataTransactionsWithLocation <- readRDS("data/dataTransactionsWithLocation.rds")
+```{r eval = F}
+### Retrieve transferred packed dataset (transactions)
+listFilesTransactions <- list.files("data/packets", pattern=".csv.gz", recursive = T)
+
+# we specify the columns we want to keep directly in "fread" call to save memory
+dataTransactions <- lapply(1:length(listFilesTransactions),function(i){
+  data <- fread(file = paste0("data/packets/",listFilesTransactions[i]), select = c("block", "transaction_hash", "time", "gateway", "num_dcs"))
+  return(data)
+})
+
+dataTransactions <- dplyr::bind_rows(dataTransactions) %>%
+  mutate(bytes = 24 * num_dcs, # Every 24 bytes sent in an uplink or downlink packet cost 1 DC = $.00001.
+         date = as.POSIXct(time, origin = "1970-01-01"),
+         date = round_date(date, "day"), # reduce the precision of the date to ease the plotting
+         gateway = factor(gateway)) %>%
+  select(-time, -num_dcs, -transaction_hash) %>%
+  rename(hotspot = gateway)
+
+# combine the hotspot to the transaction dataset to include the hotspot location
+# inner_join keeps all rows available in both X and Y
+dataTransactionsWithLocation <- inner_join(dataTransactions, dataHotspots) %>%
+  mutate(hotspot = factor(hotspot, levels = levels(dataHotspots$hotspot))) %>% # this is to avoid dropping levels for hotspots not involved in any transaction
+  select(-owner, -firstDate)
+
+# remove these two big dataset to save memory
+rm("dataHotspots")
+rm("dataTransactions")
+
+saveRDS(dataTransactionsWithLocation, "data/dataTransactionsWithLocation.rds")
 ```
 
 This is how the transaction dataset looks like. For each transaction, we have the block number, the address of the hotspot, the number of bytes transferred, the date, and the location of the hotspot.
 
 ```{r}
+dataTransactionsWithLocation <- readRDS("data/dataTransactionsWithLocation.rds")
 glimpse(dataTransactionsWithLocation)
 ```
 
@@ -502,7 +505,7 @@ I hope you enjoyed reading this article and have now a better understanding of w
 
 We look forward to receiving your feedback and ideas regarding blockchain topics that deserve to be covered in our next post. If you wish continue learning about chain data analysis using R, please follow me on [Medium](https://tdemarchin.medium.com/), [Linkedin](https://www.linkedin.com/in/tdemarchin/) and/or [Twitter](https://twitter.com/tdemarchin) so you  get alerted of a new article release. Thank you for reading and feel free to reach us if you have questions or comments.
 
-A HTML version of this article with high resolution figures and tables is available [here](https://rawcdn.githack.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII/ffb43fb9a343695440e00da49b85ba7b7c5a5536/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
+A HTML version of this article with high resolution figures and tables is available [here](https://tdemarchin.github.io/DataScienceOnBlockchainWithR-PartIII/DataScienceOnBlockchainWithR-PartIII.html). The code used to generate it is available on my [Github](https://github.com/tdemarchin/DataScienceOnBlockchainWithR-PartIII).
 
 I'd like to thank the Dewi team and Helium Discord community (@ediewald, @bigdavekers, @jamiedubs, #data-analysis) for their support and for providing the data.
 
